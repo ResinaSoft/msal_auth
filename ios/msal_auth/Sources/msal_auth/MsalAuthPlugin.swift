@@ -75,10 +75,12 @@ public class MsalAuthPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDeleg
             MsalAuth.broker = broker
             MsalAuth.authorityType = authorityType
             let authority = dict["authority"] as? String
+            let redirectUri = dict["redirectUri"] as? String
 
             createPublicClientApplication(
                 pcaType: pcaType,
                 clientId: clientId, authority: authority,
+                redirectUri: redirectUri,
                 authorityType: authorityType,
                 result: result)
         case "acquireToken":
@@ -160,6 +162,7 @@ public class MsalAuthPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDeleg
     private func createPublicClientApplication(
         pcaType: PublicClientApplicationType,
         clientId: String, authority: String?,
+        redirectUri: String?,
         authorityType: AuthorityType,
         result: @escaping FlutterResult
     ) {
@@ -189,14 +192,24 @@ public class MsalAuthPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDeleg
                 case .b2c:
                     let b2cAuthority = try MSALB2CAuthority(url: authorityUrl)
                     pcaConfig = MSALPublicClientApplicationConfig(
-                        clientId: clientId, redirectUri: nil,
+                        clientId: clientId, redirectUri: redirectUri,
                         authority: b2cAuthority)
                     pcaConfig.knownAuthorities = [b2cAuthority]
                 default:
                     let defaultAuthority = try MSALAuthority(url: authorityUrl)
                     pcaConfig = MSALPublicClientApplicationConfig(
-                        clientId: clientId, redirectUri: nil,
+                        clientId: clientId, redirectUri: redirectUri,
                         authority: defaultAuthority)
+                }
+                // A custom redirect URI is only ever supplied because the app's
+                // registered redirect does not match msauth.<bundle_id>://auth.
+                // MSAL 2.11+ rejects exactly that for non-consumer AAD tenants
+                // (and rejects it WITHOUT setting NSError, so the caller only
+                // sees an opaque Foundation._GenericObjCError). Bypassing the
+                // check is the supported escape hatch; it disables the broker,
+                // which such a redirect could not have used anyway.
+                if redirectUri != nil {
+                    pcaConfig.bypassRedirectURIValidation = true
                 }
             } catch let error as NSError {
                 setMsalError(error: error, result: result)
@@ -205,19 +218,22 @@ public class MsalAuthPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDeleg
             pcaConfig = MSALPublicClientApplicationConfig(clientId: clientId)
         }
 
-        if let application = try? MSALPublicClientApplication(
-            configuration: pcaConfig)
-        {
+        // `try?` upstream throws away the only thing that explains a PCA
+        // failure. Keep the error.
+        do {
+            let application = try MSALPublicClientApplication(
+                configuration: pcaConfig)
             // We will only have a public client application object. Apple MSAL does not have specific class for different account mode (Single & multiple). So we just assigned type that we receives from Dart and then call methods as per the type.
             MsalAuth.publicClientApplication = application
             MsalAuth.pcaType = pcaType
             result(true)
-        } else {
-            // Sets initialization error. This is a custom exception created at Dart side.
+        } catch let error as NSError {
             result(
                 FlutterError(
                     code: "PCA_INIT",
-                    message: "Unable to create public client application",
+                    message: "Unable to create public client application: "
+                        + "domain=\(error.domain) code=\(error.code) "
+                        + "\(error.localizedDescription)",
                     details: nil))
         }
     }
