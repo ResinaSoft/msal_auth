@@ -169,7 +169,7 @@ public class MsalAuthPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDeleg
         // Sets broker availability. this is required to avoid error on PCA creation
         // when 'LSApplicationQueriesSchemes' is not defined in 'Info.plist'.
         switch MsalAuth.broker {
-        case "webView", "safariBrowser":
+        case "webView", "safariBrowser", "ephemeralWebSession":
             MSALGlobalConfig.brokerAvailability = .none
         default:
             MSALGlobalConfig.brokerAvailability = .auto
@@ -281,6 +281,17 @@ public class MsalAuthPlugin: NSObject, FlutterPlugin, FlutterSceneLifeCycleDeleg
                 }
             case "safariBrowser":
                 webViewParameters.webviewType = .safariViewController
+            case "ephemeralWebSession":
+                // ASWebAuthenticationSession is the ONLY webview type MSAL
+                // applies `prefersEphemeralWebBrowserSession` to (set above,
+                // see MSALWebviewParameters.h). With .safariViewController the
+                // flag is silently ignored and cookies are shared with Safari.
+                //
+                // The callback is intercepted in-process by the redirect URI's
+                // OWN scheme (IdentityCore MSIDSystemWebviewController.m:236 —
+                // `callbackScheme:self.redirectURL.scheme`), so a redirect that
+                // does not match the bundle id still works here.
+                webViewParameters.webviewType = .authenticationSession
             default:
                 webViewParameters.webviewType = .default
             }

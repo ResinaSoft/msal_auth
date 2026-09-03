@@ -59,5 +59,26 @@ enum Broker {
   safariBrowser,
 
   /// WebView will be used.
-  webView
+  webView,
+
+  /// ASWebAuthenticationSession will be used with an EPHEMERAL (private) web
+  /// session: the auth flow gets its own cookie jar, which is discarded when
+  /// the session ends.
+  ///
+  /// Use this when a signed-out user must be able to sign in as SOMEONE ELSE.
+  /// [safariBrowser] shares cookies with Safari, so the previous user's Entra
+  /// web session stays alive and the next sign-in starts on top of it — MSAL's
+  /// `signOut()` only clears the LOCAL token cache, never the browser session.
+  ///
+  /// NOTE: [safariBrowser] cannot do this. MSAL applies
+  /// `prefersEphemeralWebBrowserSession` only to ASWebAuthenticationSession
+  /// (MSALWebviewParameters.h) — with SFSafariViewController the flag is
+  /// silently ignored.
+  ///
+  /// Like [safariBrowser] and [webView], this keeps the broker DISABLED
+  /// (`MSALGlobalConfig.brokerAvailability = .none`), so it does not require
+  /// `LSApplicationQueriesSchemes` in Info.plist.
+  ///
+  /// iOS/macOS only; ignored on Android.
+  ephemeralWebSession
 }
