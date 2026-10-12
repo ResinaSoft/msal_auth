@@ -14,7 +14,7 @@ let package = Package(
     dependencies: [
         .package(
             url: "https://github.com/AzureAD/microsoft-authentication-library-for-objc",
-            from: "2.11.0"
+            .upToNextMinor(from: "2.11.0")
         )
     ],
     targets: [
